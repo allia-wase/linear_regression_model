@@ -5,6 +5,7 @@ to enable early identification and timely mental health intervention.
 The model uses student lifestyle and academic factors such as sleep, anxiety,
 and CGPA to predict a depression severity score.
 
+---
 
 ## Dataset
 
@@ -15,10 +16,10 @@ and CGPA to predict a depression severity score.
 | **Target variable** | Depression score (continuous numeric value) |
 | **Key features** | Age, CGPA, Anxiety frequency, Sleep trouble frequency, Gender, Academic Year |
 
-
+---
 
 ## Repository Structure
-
+```
 linear_regression_model/
 │
 ├── summative/
@@ -26,3 +27,4 @@ linear_regression_model/
 │   │   └── multivariate.ipynb
 │   ├── API/              ← empty for now
 │   └── FlutterApp/       ← empty for now
+```
