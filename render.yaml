@@ -1,0 +1,8 @@
+# Render Blueprint - API at Summative/API
+services:
+  - type: web
+    name: depression-prediction-api
+    env: python
+    rootDir: Summative/API
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
