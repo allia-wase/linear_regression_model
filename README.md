@@ -1,6 +1,6 @@
 # Predicting Depression Risk Among University Students
 
-This project predicts depression risk in university students using machine learning to enable early identification and timely mental health intervention. The model uses student lifestyle and academic factors such as academic pressure, financial stress, sleep duration, and CGPA to classify depression risk (0 = Not Depressed, 1 = Depressed).
+This project predicts depression risk in university students using machine learning to enable early identification and timely mental health intervention. The model uses student lifestyle and academic factors such as academic pressure, financial stress, sleep duration, and CGPA to predict depression risk (0–1 score; higher = higher risk).
 
 ---
 
@@ -15,14 +15,44 @@ This project predicts depression risk in university students using machine learn
 
 ---
 
+## API Endpoint
+
+**Public URL:** `https://your-api-name.onrender.com` (replace with your deployed Render URL)
+
+**Swagger UI:** `https://your-api-name.onrender.com/docs`
+
+**Prediction endpoint:** `POST /predict`
+
+---
+
 ## Repository Structure
 
 ```
 linear_regression_model/
 │
-├── summative/
+├── Summative/
 │   ├── linear_regression/
-│   │   └── multivariate.ipynb
-│   ├── API/                   ← empty for now
-│   └── FlutterApp/            ← empty for now
+│   │   └── Multivariate.ipynb
+│   ├── API/
+│   │   ├── main.py
+│   │   ├── prediction.py
+│   │   ├── requirements.txt
+│   │   └── render.yaml
+│   └── FlutterApp/
 ```
+
+---
+
+## How to Run the Mobile App
+
+1. Install Flutter: https://docs.flutter.dev/get-started/install
+2. Open the Flutter app: `cd Summative/FlutterApp`
+3. Install dependencies: `flutter pub get`
+4. Update the API URL in `lib/main.dart`: set `apiBaseUrl` to your deployed API URL (e.g. `https://your-api.onrender.com`)
+5. Run on device or emulator: `flutter run`
+
+---
+
+## Video Demo
+
+[YouTube link — add your 7-minute demo video URL]

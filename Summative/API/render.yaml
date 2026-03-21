@@ -1,0 +1,9 @@
+# Render Blueprint for API deployment
+# Set root directory to Summative/API when connecting the repo
+services:
+  - type: web
+    name: depression-prediction-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars: []
