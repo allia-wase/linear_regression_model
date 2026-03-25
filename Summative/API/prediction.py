@@ -3,15 +3,16 @@ import io
 import joblib
 import numpy as np
 import pandas as pd
-import uvicorn
+import uvicorn  # pyright: ignore[reportMissingImports]
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException  # pyright: ignore[reportMissingImports]  # pyright: ignore[reportMissingImports]
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
+from typing import Any, Dict, Literal, Optional
 
 # ── App setup ────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -32,10 +33,11 @@ app.add_middleware(
         "http://localhost:8080",
         "http://localhost:3000",
         "http://10.0.2.2:8000",
-        "https://your-app.onrender.com",  # replace with your Render URL
+        "https://mindease-n866.onrender.com",
+        "https://your-app.onrender.com",
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "Accept"],
 )
 
@@ -44,6 +46,23 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "best_model.pkl")
 SCALER_PATH = os.path.join(BASE_DIR, "scaler.pkl")
+ENCODERS_PATH = os.path.join(BASE_DIR, "encoders.pkl")
+
+FEATURE_COLS = [
+    "Age",
+    "Gender",
+    "Academic Pressure",
+    "Work Pressure",
+    "CGPA",
+    "Study Satisfaction",
+    "Sleep Duration",
+    "Dietary Habits",
+    "Degree",
+    "Have you ever had suicidal thoughts ?",
+    "Work/Study Hours",
+    "Financial Stress",
+    "Family History of Mental Illness",
+]
 
 if not os.path.exists(MODEL_PATH):
     raise RuntimeError(f"best_model.pkl not found at {MODEL_PATH}")
@@ -53,19 +72,12 @@ if not os.path.exists(SCALER_PATH):
 model = joblib.load(MODEL_PATH)
 scaler = joblib.load(SCALER_PATH)
 
-# ── Encoding maps (match exactly what LabelEncoder produced in the notebook) ──
-# These mirror the LabelEncoder fit on the training data.
-# Integers are passed directly from the Flutter app — no re-encoding needed.
-#
-# Sleep Duration:   0=Less than 5hrs, 1=5-6hrs, 2=7-8hrs, 3=More than 8hrs, 4=Others
-# Dietary Habits:   0=Healthy, 1=Moderate, 2=Unhealthy
-# Gender:           0=Female, 1=Male
-# Suicidal Thoughts:0=No, 1=Yes
-# Family History:   0=No, 1=Yes
-# Degree:           0-20 (LabelEncoded in notebook)
-#
-# The scaler was fit on numeric data AFTER encoding, so the API
-# receives pre-encoded integers directly — no encoders.pkl required.
+_encoders: Optional[Dict[str, LabelEncoder]] = None
+if os.path.exists(ENCODERS_PATH):
+    _encoders = joblib.load(ENCODERS_PATH)
+
+# Flutter uses POST /predict with plain-language fields; encoders.pkl maps them
+# to integers (same as notebook LabelEncoder). File is created by POST /retrain.
 
 # ── Input schema ──────────────────────────────────────────────────────────────
 class StudentInput(BaseModel):
@@ -98,12 +110,12 @@ class StudentInput(BaseModel):
         description="0=<5hrs  1=5-6hrs  2=7-8hrs  3=>8hrs  4=Others"
     )
     Dietary_Habits: int = Field(
-        ..., ge=0, le=2,
-        description="0=Healthy  1=Moderate  2=Unhealthy"
+        ..., ge=0, le=3,
+        description="Label-encoded dietary habit (0–3 per training data)"
     )
     Degree: int = Field(
-        ..., ge=0, le=20,
-        description="Degree type (LabelEncoded integer from training, 0–20)"
+        ..., ge=0, le=50,
+        description="Label-encoded degree (integer index from training)"
     )
     Suicidal_Thoughts: int = Field(
         ..., ge=0, le=1,
@@ -143,6 +155,30 @@ class StudentInput(BaseModel):
     }
 
 
+class FlutterFormInput(BaseModel):
+    """JSON body from the Flutter app (snake_case, human-readable categories)."""
+
+    age: float = Field(..., ge=15.0, le=60.0)
+    gender: Literal["Male", "Female"]
+    academic_pressure: float = Field(..., ge=0.0, le=5.0)
+    work_pressure: float = Field(..., ge=0.0, le=5.0)
+    cgpa: float = Field(..., ge=0.0, le=10.0)
+    study_satisfaction: float = Field(..., ge=0.0, le=5.0)
+    sleep_duration: Literal[
+        "5-6 hours",
+        "7-8 hours",
+        "Less than 5 hours",
+        "More than 8 hours",
+        "Others",
+    ]
+    dietary_habits: Literal["Healthy", "Moderate", "Unhealthy", "Others"]
+    degree: str = Field(..., min_length=1, max_length=80)
+    suicidal_thoughts: Literal["Yes", "No"]
+    work_study_hours: float = Field(..., ge=0.0, le=24.0)
+    financial_stress: float = Field(..., ge=1.0, le=5.0)
+    family_history_mental_illness: Literal["Yes", "No"]
+
+
 # ── Output schemas ────────────────────────────────────────────────────────────
 class PredictionOutput(BaseModel):
     depression_score: float = Field(
@@ -163,6 +199,60 @@ class RetrainOutput(BaseModel):
     rows_used: int
 
 
+def _row_from_flutter(data: FlutterFormInput) -> Dict[str, Any]:
+    return {
+        "Age": data.age,
+        "Gender": data.gender,
+        "Academic Pressure": data.academic_pressure,
+        "Work Pressure": data.work_pressure,
+        "CGPA": data.cgpa,
+        "Study Satisfaction": data.study_satisfaction,
+        "Sleep Duration": data.sleep_duration,
+        "Dietary Habits": data.dietary_habits,
+        "Degree": data.degree.strip(),
+        "Have you ever had suicidal thoughts ?": data.suicidal_thoughts,
+        "Work/Study Hours": data.work_study_hours,
+        "Financial Stress": data.financial_stress,
+        "Family History of Mental Illness": data.family_history_mental_illness,
+    }
+
+
+def _encode_row_with_encoders(row: Dict[str, Any], encoders: Dict[str, LabelEncoder]) -> pd.DataFrame:
+    X = pd.DataFrame([row])
+    for col, le in encoders.items():
+        if col not in X.columns:
+            continue
+        val = str(X[col].iloc[0])
+        if val not in le.classes_:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid value for {col!r}: {val!r}. "
+                    f"Allowed labels: {list(le.classes_)}"
+                ),
+            )
+        X[col] = le.transform([val])[0]
+    return X
+
+
+def _prediction_output_from_scaled(input_scaled: np.ndarray) -> "PredictionOutput":
+    raw_score = float(model.predict(input_scaled)[0])
+    score = max(0.0, min(1.0, raw_score))
+    risk_label = "Depressed" if score >= 0.5 else "Not Depressed"
+    distance = abs(score - 0.5)
+    if distance >= 0.35:
+        confidence = "High"
+    elif distance >= 0.15:
+        confidence = "Medium"
+    else:
+        confidence = "Low"
+    return PredictionOutput(
+        depression_score=round(score, 4),
+        risk_label=risk_label,
+        confidence=confidence,
+    )
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 @app.get("/", tags=["Health"])
 def root():
@@ -170,8 +260,10 @@ def root():
         "status": "API is running",
         "model": "LinearRegression",
         "docs": "/docs",
-        "predict_endpoint": "/predict",
+        "predict_flutter": "/predict",
+        "predict_encoded": "/predict/encoded",
         "retrain_endpoint": "/retrain",
+        "note": "POST /retrain with training CSV creates encoders.pkl required by /predict",
     }
 
 
@@ -181,58 +273,59 @@ def health():
 
 
 @app.post("/predict", response_model=PredictionOutput, tags=["Prediction"])
-def predict(data: StudentInput):
+def predict(data: FlutterFormInput):
     """
-    Predict depression risk for a single student.
+    Flutter / mobile client: snake_case JSON and human-readable categories.
 
-    All categorical fields must be passed as their **encoded integer values**
-    (matching what LabelEncoder produced during training). No re-encoding
-    is done server-side — the scaler expects numeric input directly.
+    Requires **encoders.pkl** (created by **POST /retrain** with your training CSV).
+    """
+    global _encoders
+    if _encoders is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "encoders.pkl is missing. Call POST /retrain once with your training CSV, "
+                "then try again."
+            ),
+        )
+    try:
+        row = _row_from_flutter(data)
+        X = _encode_row_with_encoders(row, _encoders)
+        X_ord = X[FEATURE_COLS].astype(float)
+        input_scaled = scaler.transform(X_ord)
+        return _prediction_output_from_scaled(input_scaled)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
-    - Score >= 0.5 → **Depressed**
-    - Score < 0.5  → **Not Depressed**
+
+@app.post("/predict/encoded", response_model=PredictionOutput, tags=["Prediction"])
+def predict_encoded(data: StudentInput):
+    """
+    Pre-encoded integers (notebook / testing). Same numeric layout as training pipeline.
     """
     try:
-        # Build input array in EXACT same column order as training
-        input_array = np.array([[
-            data.Age,               # Age
-            data.Gender,            # Gender (0/1)
-            data.Academic_Pressure, # Academic Pressure
-            data.Work_Pressure,     # Work Pressure
-            data.CGPA,              # CGPA
-            data.Study_Satisfaction,# Study Satisfaction
-            data.Sleep_Duration,    # Sleep Duration (0-4)
-            data.Dietary_Habits,    # Dietary Habits (0-2)
-            data.Degree,            # Degree (0-20)
-            data.Suicidal_Thoughts, # Suicidal Thoughts (0/1)
-            data.Work_Study_Hours,  # Work/Study Hours
-            data.Financial_Stress,  # Financial Stress
-            data.Family_History,    # Family History (0/1)
-        ]], dtype=float)
-
-        # Scale using the same scaler fit during training
-        input_scaled = scaler.transform(input_array)
-
-        # Predict and clamp to [0, 1]
-        raw_score = float(model.predict(input_scaled)[0])
-        score = max(0.0, min(1.0, raw_score))
-
-        risk_label = "Depressed" if score >= 0.5 else "Not Depressed"
-
-        distance = abs(score - 0.5)
-        if distance >= 0.35:
-            confidence = "High"
-        elif distance >= 0.15:
-            confidence = "Medium"
-        else:
-            confidence = "Low"
-
-        return PredictionOutput(
-            depression_score=round(score, 4),
-            risk_label=risk_label,
-            confidence=confidence,
+        input_array = np.array(
+            [[
+                data.Age,
+                data.Gender,
+                data.Academic_Pressure,
+                data.Work_Pressure,
+                data.CGPA,
+                data.Study_Satisfaction,
+                data.Sleep_Duration,
+                data.Dietary_Habits,
+                data.Degree,
+                data.Suicidal_Thoughts,
+                data.Work_Study_Hours,
+                data.Financial_Stress,
+                data.Family_History,
+            ]],
+            dtype=float,
         )
-
+        input_scaled = scaler.transform(input_array)
+        return _prediction_output_from_scaled(input_scaled)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
@@ -251,7 +344,7 @@ async def retrain(file: UploadFile = File(...)):
     Have you ever had suicidal thoughts ?, Work/Study Hours,
     Financial Stress, Family History of Mental Illness, Depression
     """
-    global model, scaler
+    global model, scaler, _encoders
 
     if not file.filename.endswith(".csv"):
         raise HTTPException(
@@ -302,15 +395,17 @@ async def retrain(file: UploadFile = File(...)):
         X_train["Financial Stress"] = X_train["Financial Stress"].fillna(train_median)
         X_test["Financial Stress"] = X_test["Financial Stress"].fillna(train_median)
 
-        # Encode categoricals on train only
+        # Encode categoricals on train only; persist encoders for POST /predict
         cat_cols = X_train.select_dtypes(include="object").columns.tolist()
-        le = LabelEncoder()
+        encoders_dict: Dict[str, LabelEncoder] = {}
         for col in cat_cols:
+            le = LabelEncoder()
             le.fit(X_train[col].astype(str))
+            encoders_dict[col] = le
             X_train[col] = le.transform(X_train[col].astype(str))
             X_test[col] = X_test[col].apply(
-                lambda x: le.transform([str(x)])[0]
-                if str(x) in le.classes_ else -1
+                lambda x, enc=le: enc.transform([str(x)])[0]
+                if str(x) in enc.classes_ else -1
             )
 
         # Scale on train only
@@ -329,8 +424,10 @@ async def retrain(file: UploadFile = File(...)):
         # Save and hot-swap
         joblib.dump(new_model, MODEL_PATH)
         joblib.dump(new_scaler, SCALER_PATH)
+        joblib.dump(encoders_dict, ENCODERS_PATH)
         model = new_model
         scaler = new_scaler
+        _encoders = encoders_dict
 
         return RetrainOutput(
             message="Model retrained and updated successfully.",
