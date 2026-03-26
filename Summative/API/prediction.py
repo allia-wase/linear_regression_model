@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 import uvicorn  # pyright: ignore[reportMissingImports]
 
-from fastapi import FastAPI, UploadFile, File, HTTPException  # pyright: ignore[reportMissingImports]  # pyright: ignore[reportMissingImports]
+from fastapi import FastAPI, Request, UploadFile, File, HTTPException  # pyright: ignore[reportMissingImports]
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
@@ -263,7 +263,8 @@ def root():
         "predict_flutter": "/predict",
         "predict_encoded": "/predict/encoded",
         "retrain_endpoint": "/retrain",
-        "note": "POST /retrain with training CSV creates encoders.pkl required by /predict",
+        "note": "POST /predict accepts Flutter JSON (age, gender, …) or encoded JSON (Age, Gender, …). "
+        "Flutter path needs encoders.pkl from POST /retrain.",
     }
 
 
@@ -272,13 +273,7 @@ def health():
     return {"status": "healthy", "model": "LinearRegression"}
 
 
-@app.post("/predict", response_model=PredictionOutput, tags=["Prediction"])
-def predict(data: FlutterFormInput):
-    """
-    Flutter / mobile client: snake_case JSON and human-readable categories.
-
-    Requires **encoders.pkl** (created by **POST /retrain** with your training CSV).
-    """
+def _predict_flutter_impl(data: FlutterFormInput) -> PredictionOutput:
     global _encoders
     if _encoders is None:
         raise HTTPException(
@@ -288,12 +283,71 @@ def predict(data: FlutterFormInput):
                 "then try again."
             ),
         )
+    row = _row_from_flutter(data)
+    X = _encode_row_with_encoders(row, _encoders)
+    X_ord = X[FEATURE_COLS].astype(float)
+    input_scaled = scaler.transform(X_ord)
+    return _prediction_output_from_scaled(input_scaled)
+
+
+def _predict_student_impl(data: StudentInput) -> PredictionOutput:
+    input_array = np.array(
+        [[
+            data.Age,
+            data.Gender,
+            data.Academic_Pressure,
+            data.Work_Pressure,
+            data.CGPA,
+            data.Study_Satisfaction,
+            data.Sleep_Duration,
+            data.Dietary_Habits,
+            data.Degree,
+            data.Suicidal_Thoughts,
+            data.Work_Study_Hours,
+            data.Financial_Stress,
+            data.Family_History,
+        ]],
+        dtype=float,
+    )
+    input_scaled = scaler.transform(input_array)
+    return _prediction_output_from_scaled(input_scaled)
+
+
+@app.post("/predict", response_model=PredictionOutput, tags=["Prediction"])
+async def predict(request: Request):
+    """
+    **Two JSON shapes** (auto-detected):
+
+    - **Flutter:** snake_case keys (`age`, `gender`, `academic_pressure`, …) and plain-language
+      categories. Needs **encoders.pkl** (from **POST /retrain**).
+    - **Encoded / Swagger example:** PascalCase keys (`Age`, `Gender`, `Academic_Pressure`, …)
+      with integer-encoded categories — same as the notebook export.
+    """
     try:
-        row = _row_from_flutter(data)
-        X = _encode_row_with_encoders(row, _encoders)
-        X_ord = X[FEATURE_COLS].astype(float)
-        input_scaled = scaler.transform(X_ord)
-        return _prediction_output_from_scaled(input_scaled)
+        raw = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Request body must be valid JSON")
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=400, detail="JSON object required")
+
+    if "Age" in raw:
+        try:
+            data = StudentInput.model_validate(raw)
+        except ValidationError as e:
+            raise HTTPException(status_code=422, detail=e.errors())
+        try:
+            return _predict_student_impl(data)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+
+    try:
+        data = FlutterFormInput.model_validate(raw)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors())
+    try:
+        return _predict_flutter_impl(data)
     except HTTPException:
         raise
     except Exception as e:
@@ -302,30 +356,11 @@ def predict(data: FlutterFormInput):
 
 @app.post("/predict/encoded", response_model=PredictionOutput, tags=["Prediction"])
 def predict_encoded(data: StudentInput):
-    """
-    Pre-encoded integers (notebook / testing). Same numeric layout as training pipeline.
-    """
+    """Same as **POST /predict** with PascalCase `Age` body (alias for tools/tests)."""
     try:
-        input_array = np.array(
-            [[
-                data.Age,
-                data.Gender,
-                data.Academic_Pressure,
-                data.Work_Pressure,
-                data.CGPA,
-                data.Study_Satisfaction,
-                data.Sleep_Duration,
-                data.Dietary_Habits,
-                data.Degree,
-                data.Suicidal_Thoughts,
-                data.Work_Study_Hours,
-                data.Financial_Stress,
-                data.Family_History,
-            ]],
-            dtype=float,
-        )
-        input_scaled = scaler.transform(input_array)
-        return _prediction_output_from_scaled(input_scaled)
+        return _predict_student_impl(data)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
