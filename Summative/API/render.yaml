@@ -1,5 +1,5 @@
-# Render Blueprint for API deployment
-# Set root directory to Summative/API when connecting the repo
+# Render: in the service settings, set Root Directory to Summative/API (monorepo).
+# After deploy, GET / must include "deploy_tag" in JSON (see prediction.py).
 services:
   - type: web
     name: depression-prediction-api

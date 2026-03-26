@@ -14,6 +14,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 from typing import Any, Dict, Literal, Optional
 
+# Bump when /predict behavior changes — check GET / on your host to confirm deploy.
+API_DEPLOY_TAG = "mind-ease-v3-flutter-first"
+
 # ── App setup ────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="Student Depression Prediction API",
@@ -259,11 +262,12 @@ def root():
     return {
         "status": "API is running",
         "model": "LinearRegression",
+        "deploy_tag": API_DEPLOY_TAG,
         "docs": "/docs",
         "predict_flutter": "/predict",
         "predict_encoded": "/predict/encoded",
         "retrain_endpoint": "/retrain",
-        "note": "POST /predict accepts Flutter JSON (age, gender, …) or encoded JSON (Age, Gender, …). "
+        "note": "POST /predict: use lowercase 'age' (Flutter) or 'Age' (encoded). "
         "Flutter path needs encoders.pkl from POST /retrain.",
     }
 
@@ -330,6 +334,19 @@ async def predict(request: Request):
     if not isinstance(raw, dict):
         raise HTTPException(status_code=400, detail="JSON object required")
 
+    # Flutter sends lowercase "age"; encoded/Swagger sends "Age". Check Flutter first.
+    if "age" in raw:
+        try:
+            data = FlutterFormInput.model_validate(raw)
+        except ValidationError as e:
+            raise HTTPException(status_code=422, detail=e.errors())
+        try:
+            return _predict_flutter_impl(data)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+
     if "Age" in raw:
         try:
             data = StudentInput.model_validate(raw)
@@ -342,16 +359,14 @@ async def predict(request: Request):
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
-    try:
-        data = FlutterFormInput.model_validate(raw)
-    except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
-    try:
-        return _predict_flutter_impl(data)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+    raise HTTPException(
+        status_code=400,
+        detail={
+            "message": "Missing routing key: send lowercase 'age' (Flutter) or 'Age' (encoded).",
+            "received_keys": list(raw.keys()),
+            "deploy_tag": API_DEPLOY_TAG,
+        },
+    )
 
 
 @app.post("/predict/encoded", response_model=PredictionOutput, tags=["Prediction"])

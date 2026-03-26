@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -343,6 +344,9 @@ class _PredictionPageState extends State<PredictionPage> {
       if (fs is int) body['financial_stress'] = fs.toDouble();
 
       final url = Uri.parse('$apiBaseUrl/predict');
+      if (kDebugMode) {
+        debugPrint('POST $url keys=${body.keys.toList()}');
+      }
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
