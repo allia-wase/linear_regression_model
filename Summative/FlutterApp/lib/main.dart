@@ -455,7 +455,12 @@ class _PredictionPageState extends State<PredictionPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bg = Color.lerp(theme.colorScheme.surfaceContainerLowest, theme.colorScheme.primaryContainer, 0.08)!;
+    // Soft tinted page background (cards stay light for contrast).
+    final bg = Color.lerp(
+      theme.colorScheme.surfaceContainerLowest,
+      theme.colorScheme.primaryContainer,
+      0.28,
+    )!;
 
     return Scaffold(
       backgroundColor: bg,
@@ -476,6 +481,59 @@ class _PredictionPageState extends State<PredictionPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 18),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface.withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: theme.colorScheme.outlineVariant.withOpacity(0.65),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: theme.colorScheme.shadow.withOpacity(0.07),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.secondaryContainer.withOpacity(0.55),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(9),
+                            child: Icon(
+                              Icons.psychology_alt_outlined,
+                              size: 22,
+                              color: theme.colorScheme.onSecondaryContainer.withOpacity(0.85),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            'Enter your student and lifestyle details below to get a '
+                            'depression risk estimate and confidence from the linear '
+                            'regression model—use for coursework, not as medical advice.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              height: 1.5,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
               ..._sections.entries.map((entry) {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 14),
@@ -507,27 +565,40 @@ class _PredictionPageState extends State<PredictionPage> {
                           ),
                           const SizedBox(height: 14),
                           ...entry.value.map((f) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: TextFormField(
-                                  controller: _controllers[f.keyJson],
-                                  decoration: InputDecoration(
-                                    labelText: f.label,
-                                    hintText: f.hint,
-                                  ),
-                                  keyboardType: f.keyboardType,
-                                  inputFormatters: f.isInt
-                                      ? [FilteringTextInputFormatter.digitsOnly]
-                                      : f.isFloat
-                                          ? [
-                                              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                                            ]
-                                          : null,
-                                  validator: (v) {
-                                    if (v == null || v.trim().isEmpty) {
-                                      return 'Required';
-                                    }
-                                    return f.extraValidator?.call(v);
-                                  },
+                                padding: const EdgeInsets.only(bottom: 14),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      f.label,
+                                      style: theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextFormField(
+                                      controller: _controllers[f.keyJson],
+                                      decoration: InputDecoration(
+                                        hintText: f.hint,
+                                        floatingLabelBehavior: FloatingLabelBehavior.never,
+                                      ),
+                                      keyboardType: f.keyboardType,
+                                      inputFormatters: f.isInt
+                                          ? [FilteringTextInputFormatter.digitsOnly]
+                                          : f.isFloat
+                                              ? [
+                                                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                                                ]
+                                              : null,
+                                      validator: (v) {
+                                        if (v == null || v.trim().isEmpty) {
+                                          return 'Required';
+                                        }
+                                        return f.extraValidator?.call(v);
+                                      },
+                                    ),
+                                  ],
                                 ),
                               )),
                         ],
