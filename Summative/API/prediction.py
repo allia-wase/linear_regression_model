@@ -6,8 +6,8 @@ import pandas as pd
 import uvicorn  # pyright: ignore[reportMissingImports]
 
 from fastapi import FastAPI, Request, UploadFile, File, HTTPException  # pyright: ignore[reportMissingImports]
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, ValidationError
+from fastapi.middleware.cors import CORSMiddleware  # pyright: ignore[reportMissingImports]  # pyright: ignore[reportMissingImports]  # pyright: ignore[reportMissingImports]
+from pydantic import BaseModel, Field, ValidationError  # pyright: ignore[reportMissingImports]  # pyright: ignore[reportMissingImports]
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
@@ -28,20 +28,14 @@ app = FastAPI(
 )
 
 # ── CORS Middleware ───────────────────────────────────────────────────────────
-# Explicitly configured — NOT using wildcard (*) for security.
+# Flutter Web uses random localhost ports; a fixed list misses them and causes
+# "Failed to fetch" in the browser. Wildcard allows any origin (OK for this API).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost",
-        "http://localhost:8080",
-        "http://localhost:3000",
-        "http://10.0.2.2:8000",
-        "https://mindease-n866.onrender.com",
-        "https://your-app.onrender.com",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Accept"],
+    allow_headers=["*"],
 )
 
 # ── Load model and scaler ─────────────────────────────────────────────────────

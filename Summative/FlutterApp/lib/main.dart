@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -18,7 +20,7 @@ class DepressionPredictorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Depression Risk Predictor',
+      title: 'Depression risk predictor',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -26,13 +28,25 @@ class DepressionPredictorApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
         useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          centerTitle: true,
+          elevation: 0,
+          scrolledUnderElevation: 0.5,
+          surfaceTintColor: Colors.transparent,
+        ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
         cardTheme: CardThemeData(
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shadowColor: Colors.black26,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
           color: Colors.white,
         ),
       ),
@@ -292,6 +306,19 @@ class _PredictionPageState extends State<PredictionPage> {
     super.dispose();
   }
 
+  /// Short message for users; avoids raw ClientException / URI dumps.
+  String _friendlyConnectionError(Object e) {
+    final t = e.toString();
+    if (t.contains('Failed to fetch') ||
+        t.contains('ClientException') ||
+        t.contains('SocketException') ||
+        t.contains('HandshakeException')) {
+      return 'Unable to reach the prediction service. '
+          'Check your connection, wait if the server was sleeping, then try again.';
+    }
+    return 'Something went wrong. Please try again.\n($t)';
+  }
+
   String _formatApiError(dynamic decoded) {
     if (decoded is Map && decoded['detail'] != null) {
       final d = decoded['detail'];
@@ -362,8 +389,8 @@ class _PredictionPageState extends State<PredictionPage> {
           _isLoading = false;
           if (score != null && risk != null && conf != null) {
             _resultMessage =
-                'Depression score: ${score.toStringAsFixed(4)} (0–1, higher = more risk)\n'
-                'Classification: $risk\n'
+                'Score: ${score.toStringAsFixed(4)}\n'
+                'Risk: $risk\n'
                 'Confidence: $conf';
             _isError = false;
           } else {
@@ -387,56 +414,81 @@ class _PredictionPageState extends State<PredictionPage> {
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _resultMessage = 'Request failed: $e\n'
-            'Check apiBaseUrl in main.dart and that the API is running.';
+        _resultMessage = _friendlyConnectionError(e);
         _isError = true;
       });
+    }
+  }
+
+  static IconData _iconForSection(String title) {
+    switch (title) {
+      case 'Profile':
+        return Icons.person_outline_rounded;
+      case 'Academic':
+        return Icons.menu_book_outlined;
+      case 'Lifestyle & health':
+        return Icons.nights_stay_outlined;
+      case 'Risk factors':
+        return Icons.favorite_border_rounded;
+      default:
+        return Icons.edit_note_rounded;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bg = Color.lerp(theme.colorScheme.surfaceContainerLowest, theme.colorScheme.primaryContainer, 0.12)!;
+    final bg = Color.lerp(theme.colorScheme.surfaceContainerLowest, theme.colorScheme.primaryContainer, 0.08)!;
 
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
-        title: const Text('Depression risk predictor'),
-        centerTitle: true,
+        title: Text(
+          'Depression risk predictor',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
+          ),
+        ),
+        backgroundColor: theme.colorScheme.surface,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 36),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Enter each field below, then tap Predict. Sleep and diet values must match the training dataset wording. '
-                'If the API returns a 503 about encoders.pkl, run POST /retrain once on the server with your CSV, then try again.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 20),
               ..._sections.entries.map((entry) {
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.only(bottom: 14),
                   child: Card(
+                    clipBehavior: Clip.antiAlias,
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            entry.key,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.primary,
-                            ),
+                          Row(
+                            children: [
+                              Icon(
+                                _iconForSection(entry.key),
+                                size: 22,
+                                color: theme.colorScheme.primary,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  entry.key,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.colorScheme.onSurface,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           ...entry.value.map((f) => Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: TextFormField(
@@ -471,7 +523,7 @@ class _PredictionPageState extends State<PredictionPage> {
                 onPressed: _isLoading ? null : _predict,
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 child: _isLoading
                     ? SizedBox(
@@ -482,31 +534,41 @@ class _PredictionPageState extends State<PredictionPage> {
                           color: theme.colorScheme.onPrimary,
                         ),
                       )
-                    : const Text('Predict'),
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.analytics_outlined, size: 22, color: theme.colorScheme.onPrimary),
+                          const SizedBox(width: 10),
+                          Text('Predict', style: TextStyle(color: theme.colorScheme.onPrimary)),
+                        ],
+                      ),
               ),
               if (_resultMessage != null) ...[
                 const SizedBox(height: 20),
                 Material(
                   color: _isError
-                      ? theme.colorScheme.errorContainer
-                      : theme.colorScheme.primaryContainer,
+                      ? theme.colorScheme.errorContainer.withOpacity(0.9)
+                      : theme.colorScheme.primaryContainer.withOpacity(0.85),
                   borderRadius: BorderRadius.circular(16),
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(18),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Icon(
-                          _isError ? Icons.error_outline : Icons.check_circle_outline,
+                          _isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
+                          size: 26,
                           color: _isError
                               ? theme.colorScheme.onErrorContainer
                               : theme.colorScheme.onPrimaryContainer,
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 14),
                         Expanded(
                           child: Text(
                             _resultMessage!,
                             style: theme.textTheme.bodyLarge?.copyWith(
+                              height: 1.45,
                               color: _isError
                                   ? theme.colorScheme.onErrorContainer
                                   : theme.colorScheme.onPrimaryContainer,
