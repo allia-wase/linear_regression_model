@@ -1,5 +1,6 @@
 // ignore_for_file: deprecated_member_use
 
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -308,13 +309,21 @@ class _PredictionPageState extends State<PredictionPage> {
 
   /// Short message for users; avoids raw ClientException / URI dumps.
   String _friendlyConnectionError(Object e) {
+    if (e is TimeoutException) {
+      return 'The server is slow to respond (common on free hosting). '
+          'Wait a minute and tap Predict again.';
+    }
     final t = e.toString();
     if (t.contains('Failed to fetch') ||
         t.contains('ClientException') ||
         t.contains('SocketException') ||
         t.contains('HandshakeException')) {
-      return 'Unable to reach the prediction service. '
-          'Check your connection, wait if the server was sleeping, then try again.';
+      if (kIsWeb) {
+        return 'Browser blocked the API call (CORS). Redeploy Summative/API to Render '
+            'so OPTIONS /predict allows your localhost origin, or run this app on '
+            'Windows/Android (no CORS): flutter run -d windows';
+      }
+      return 'Unable to reach the prediction service. Check the API URL and network.';
     }
     return 'Something went wrong. Please try again.\n($t)';
   }
@@ -374,11 +383,19 @@ class _PredictionPageState extends State<PredictionPage> {
       if (kDebugMode) {
         debugPrint('POST $url keys=${body.keys.toList()}');
       }
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      );
+      // Render free tier can take 30–60s to wake; default short timeouts fail first.
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(
+            const Duration(seconds: 90),
+            onTimeout: () => throw TimeoutException(
+              'No response in 90s (server may be starting).',
+            ),
+          );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;

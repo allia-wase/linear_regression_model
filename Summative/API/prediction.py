@@ -28,14 +28,16 @@ app = FastAPI(
 )
 
 # ── CORS Middleware ───────────────────────────────────────────────────────────
-# Flutter Web uses random localhost ports; a fixed list misses them and causes
-# "Failed to fetch" in the browser. Wildcard allows any origin (OK for this API).
+# Flutter Web uses random localhost ports; a fixed origin list misses them and
+# triggers "Failed to fetch". Wildcard + regex covers dev and deployed demos.
+# allow_credentials MUST stay False when using "*" (browser rules).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "OPTIONS", "HEAD"],
     allow_headers=["*"],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?",
 )
 
 # ── Load model and scaler ─────────────────────────────────────────────────────
