@@ -455,12 +455,11 @@ class _PredictionPageState extends State<PredictionPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Soft tinted page background (cards stay light for contrast).
-    final bg = Color.lerp(
-      theme.colorScheme.surfaceContainerLowest,
-      theme.colorScheme.primaryContainer,
-      0.28,
-    )!;
+    // Soft lavender-blue wash (readable on all devices; cards stay white).
+    final bg = Color.alphaBlend(
+      theme.colorScheme.primaryContainer.withOpacity(0.44),
+      theme.colorScheme.surfaceContainerLow,
+    );
 
     return Scaffold(
       backgroundColor: bg,
@@ -472,7 +471,10 @@ class _PredictionPageState extends State<PredictionPage> {
             letterSpacing: 0.3,
           ),
         ),
-        backgroundColor: theme.colorScheme.surface,
+        backgroundColor: Color.alphaBlend(
+          theme.colorScheme.primaryContainer.withOpacity(0.22),
+          theme.colorScheme.surface,
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 36),
