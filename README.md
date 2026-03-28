@@ -54,4 +54,4 @@ linear_regression_model/
 ---
 
 ## Video Demo
-'
+https://drive.google.com/file/d/1cr3BLNRhvpBGUHyqQpyh7WXhKIWe89F5/view?usp=sharing
