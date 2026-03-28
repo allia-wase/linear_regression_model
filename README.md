@@ -17,9 +17,9 @@ This project predicts depression risk in university students using machine learn
 
 ## API Endpoint
 
-**Public URL:** `https://your-api-name.onrender.com` (replace with your deployed Render URL)
+**Public URL:** `https://mindease-n866.onrender.com` (replace with your deployed Render URL)
 
-**Swagger UI:** `https://your-api-name.onrender.com/docs`
+**Swagger UI:** `https://mindease-n866.onrender.com/docs`
 
 **Prediction endpoint:** `POST /predict`
 
@@ -54,5 +54,4 @@ linear_regression_model/
 ---
 
 ## Video Demo
-
-[YouTube link — add your 7-minute demo video URL]
+'
